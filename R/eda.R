@@ -6,6 +6,9 @@ library(dplyr)
 library(stringr)
 library(purrr)
 library(tidyr)
+library(ggplot2)
+theme_set(theme_light())
+heute <- gsub("-", "", Sys.Date())
 
 
 # get recent files
@@ -36,6 +39,35 @@ df$weeks_global %>%
 
 read_tsv("data_raw/20211117_weeks_global.tsv") %>% 
   filter(grepl("Squid|Arcane", show_title))
+
+top_views_per_week <- df$weeks_global %>% 
+  group_by(show_title) %>% 
+  mutate(total_hours = sum(weekly_hours_viewed),
+         avg_per_week = total_hours/max(cumulative_weeks_in_top_10)) %>% 
+  ungroup() %>% 
+  arrange(desc(avg_per_week)) %>% 
+  select(show_title, avg_per_week) %>% 
+  distinct() 
+
+
+save(top_views_per_week,
+     file = paste0("data/", heute, "_top_weeks.rds"))
+
+
+top_weeks_n <- 2
+df$weeks_global %>% 
+  filter(show_title %in% pull(slice(top_views_per_week, 1:top_weeks_n), show_title)) %>% 
+  ggplot() +
+  #geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, group = season_title), color = "black", size = 1.2, alpha = 0.5) +
+  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.5) +
+  labs(title = paste("Top", top_weeks_n, "Movies/Shows"),
+       subtitle = paste("Date:", format(Sys.Date(), "%b %d, %Y")),
+       x = "Cumulative weeks in top 10",
+       y = "Weekly hours viewed",
+       color = "Season Title") +
+  scale_color_brewer(type = "qual", palette = "Paired") +
+  scale_y_continuous(labels = scales::number_format()) +
+  scale_x_continuous(labels = scales::number_format(accuracy = 1)) 
 
 # explore weekly hours viewed
 df$weeks_global %>% 

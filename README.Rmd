@@ -57,9 +57,12 @@ The goal of netflix_top10 is to explore the top 10 netflix shows/movies on regul
 top_weeks_n <- 5
 df$weeks_global %>% 
   filter(show_title %in% pull(slice(top_views_per_week, 1:top_weeks_n), show_title)) %>% 
+  mutate(season_title = ifelse(season_title == "N/A", show_title, season_title),
+         category = ifelse(grepl("TV", category), "TV", category),
+         category = ifelse(grepl("Film", category), "Movie", category),) %>% 
   ggplot() +
   #geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, group = season_title), color = "black", size = 1.2, alpha = 0.5) +
-  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.8) +
+  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
   geom_point(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
   labs(title = paste("Top", top_weeks_n, "Movies/Shows"),
        subtitle = paste("Date:", format(Sys.Date(), "%b %d, %Y")),

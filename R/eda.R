@@ -54,17 +54,20 @@ save(top_views_per_week,
      file = paste0("data/", heute, "_top_weeks.rds"))
 
 
-top_weeks_n <- 2
+top_weeks_n <- 5
 df$weeks_global %>% 
   filter(show_title %in% pull(slice(top_views_per_week, 1:top_weeks_n), show_title)) %>% 
+  filter(!is.na(category)) %>% 
   ggplot() +
   #geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, group = season_title), color = "black", size = 1.2, alpha = 0.5) +
-  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.5) +
+  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
+  geom_point(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
   labs(title = paste("Top", top_weeks_n, "Movies/Shows"),
        subtitle = paste("Date:", format(Sys.Date(), "%b %d, %Y")),
        x = "Cumulative weeks in top 10",
        y = "Weekly hours viewed",
        color = "Season Title") +
+  facet_wrap(~category, ncol = 1) +
   scale_color_brewer(type = "qual", palette = "Paired") +
   scale_y_continuous(labels = scales::number_format()) +
   scale_x_continuous(labels = scales::number_format(accuracy = 1)) 

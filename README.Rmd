@@ -10,7 +10,7 @@ knitr::opts_chunk$set(
   echo = FALSE,
   message = FALSE,
   warning = FALSE,
-  fig.height = 8,
+  fig.height = 16,
   fig.width = 12,
   comment = "#>"
 )
@@ -21,10 +21,17 @@ library(purrr)
 library(stringr)
 library(ggplot2)
 library(showtext)
+library(patchwork)
 
 font_add_google("Schoolbell", "bell")
 showtext_auto()
 theme_set(theme_light(base_size = 20, base_family = "bell"))
+
+heute <- gsub("-", "", Sys.Date())
+
+source("R/download_current.R")
+download_current()
+
 
 # get recent files
 recent_files <- list.files("data_raw/", full.names = TRUE) %>% 
@@ -38,11 +45,23 @@ recent_files <- list.files("data_raw/", full.names = TRUE) %>%
 df <- map(pull(recent_files, value), read_tsv) 
 names(df) <- pull(recent_files, cat)
 
-recent_file_meta <- list.files("data/", pattern = "rds", full.names = TRUE) %>% 
-  as_tibble() %>% 
-  arrange(desc(value)) %>% 
-  pull(value)
-load(recent_file_meta[1])
+top_views_per_week <- df$weeks_global %>% 
+  group_by(show_title) %>% 
+  mutate(total_hours = sum(weekly_hours_viewed),
+         avg_per_week = total_hours/max(cumulative_weeks_in_top_10)) %>% 
+  ungroup() %>% 
+  mutate(season_title = ifelse(season_title == "N/A", show_title, season_title),
+         category = ifelse(grepl("TV", category), "TV", category),
+         category = ifelse(grepl("Film", category), "Movie", category)) %>% 
+  group_by(category) %>% 
+  arrange(desc(avg_per_week)) %>% 
+  select(category, show_title, avg_per_week) %>% 
+  distinct()
+  
+
+
+save(top_views_per_week,
+     file = paste0("data/", heute, "_top_weeks.rds"))
 
 ```
 
@@ -55,26 +74,68 @@ The goal of netflix_top10 is to explore the top 10 netflix shows/movies on regul
 
 ```{r}
 top_weeks_n <- 5
-df$weeks_global %>% 
-  filter(show_title %in% pull(slice(top_views_per_week, 1:top_weeks_n), show_title)) %>% 
+data <- df$weeks_global %>% 
   mutate(season_title = ifelse(season_title == "N/A", show_title, season_title),
          category = ifelse(grepl("TV", category), "TV", category),
-         category = ifelse(grepl("Film", category), "Movie", category),) %>% 
-  ggplot() +
-  #geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, group = season_title), color = "black", size = 1.2, alpha = 0.5) +
-  geom_line(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
-  geom_point(aes(cumulative_weeks_in_top_10, weekly_hours_viewed, color = season_title, group = season_title), size = 1.2, alpha = 0.9) +
-  labs(title = paste("Top", top_weeks_n, "Movies/Shows"),
-       subtitle = paste("Date:", format(Sys.Date(), "%b %d, %Y")),
-       x = "Cumulative weeks in top 10",
-       y = "Weekly hours viewed",
-       color = "Season Title") +
-  facet_wrap(~category, ncol = 1) +
-  scale_color_brewer(type = "qual", palette = "Paired") +
-  scale_y_continuous(labels = scales::number_format()) +
-  scale_x_continuous(labels = scales::number_format(accuracy = 1)) +
-  theme(legend.position = "bottom") +
-  theme(strip.background = element_rect(fill = "#33367C")) +
-  guides(colour = guide_legend(title.position = "top"))
+         category = ifelse(grepl("Film", category), "Movie", category)) %>% 
+  filter(show_title %in% pull(slice(top_views_per_week, 1:top_weeks_n), show_title))
+  
+make_graph <- function(data, cat) {
+  
+  
+  if (cat == "TV") {
+    recent_season <- data %>%
+      filter(category == cat) %>%
+      group_by(show_title) %>%
+      arrange(desc(season_title)) %>%
+      slice(1) %>%
+      pull(season_title)
+  } else {
+    recent_season <- data %>% 
+      filter(category == "Movie") %>%
+      distinct(season_title) %>% 
+      pull()
+  }
+  
+    data %>% 
+    filter(season_title %in% recent_season) %>% 
+    ggplot() +
+    geom_line(
+      aes(
+        cumulative_weeks_in_top_10,
+        weekly_hours_viewed,
+        color = season_title,
+        group = season_title
+      ),
+      size = 1.2,
+      alpha = 0.9
+    ) +
+    geom_point(
+      aes(
+        cumulative_weeks_in_top_10,
+        weekly_hours_viewed,
+        color = season_title,
+        group = season_title
+      ),
+      size = 1.2,
+      alpha = 0.9
+    ) +
+    labs(
+      title = paste("Top", top_weeks_n, "in", cat),
+      subtitle = paste("Date:", format(Sys.Date(), "%b %d, %Y")),
+      x = "Cumulative weeks in top 10",
+      y = "Weekly hours viewed",
+      color = "Title"
+    ) +
+    #facet_wrap( ~ category, ncol = 1) +
+    scale_color_brewer(type = "qual", palette = "Paired") +
+    scale_y_continuous(labels = scales::number_format()) +
+    scale_x_continuous(labels = scales::number_format(accuracy = 1)) +
+    theme(legend.position = "bottom") +
+    theme(strip.background = element_rect(fill = "#33367C")) +
+    guides(colour = guide_legend(title.position = "top"))
+}
 
 
+
+make_graph(data, unique(data$category)[2]) / make_graph(data, unique(data$category)[1])

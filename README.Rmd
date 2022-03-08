@@ -34,7 +34,7 @@ download_current()
 
 
 # get recent files
-recent_files <- list.files("data_raw/", full.names = TRUE) %>% 
+recent_files <- list.files("data_raw", full.names = TRUE) %>% 
   as_tibble() %>% 
   arrange(desc(value)) %>%  
   mutate(cat = basename(value), 
@@ -73,7 +73,7 @@ save(top_views_per_week,
 The goal of netflix_top10 is to explore the top 10 netflix shows/movies on regularily bases.
 
 ```{r}
-top_weeks_n <- 5
+top_weeks_n <- 6
 data <- df$weeks_global %>% 
   mutate(season_title = ifelse(season_title == "N/A", show_title, season_title),
          category = ifelse(grepl("TV", category), "TV", category),
@@ -131,9 +131,10 @@ make_graph <- function(data, cat) {
     scale_color_brewer(type = "qual", palette = "Paired") +
     scale_y_continuous(labels = scales::number_format()) +
     scale_x_continuous(labels = scales::number_format(accuracy = 1)) +
-    theme(legend.position = "bottom") +
-    theme(strip.background = element_rect(fill = "#33367C")) +
-    guides(colour = guide_legend(title.position = "top"))
+    theme(legend.position = "bottom",
+          strip.background = element_rect(fill = "#33367C")) +
+    guides(colour = guide_legend(title.position = "top", nrow = 2, byrow = TRUE))
+  
 }
 
 

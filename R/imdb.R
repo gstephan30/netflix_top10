@@ -5,10 +5,107 @@ library(forecast)
 library(forcats)
 library(patchwork)
 
+netflix <- list.files("data", "rds", full.names = TRUE) %>% 
+  sort(decreasing = TRUE) %>% 
+  .[1] %>% 
+  read_rds() %>% 
+  group_by(category) %>% 
+  arrange(desc(avg_per_week)) %>% 
+  slice(1:10) %>% 
+  mutate(heute = Sys.Date()) 
+
 episodes <- read_delim("https://datasets.imdbws.com/title.episode.tsv.gz", delim = "\t")
-title.akas <- read_delim("https://datasets.imdbws.com/title.akas.tsv.gz", delim = "\t")
 title <- read_delim("https://datasets.imdbws.com/title.basics.tsv.gz", delim = "\t")
 ratings <- read_delim("https://datasets.imdbws.com/title.ratings.tsv.gz", delim = "\t")
+
+netflix_imdb <- title %>% 
+  filter(primaryTitle %in% unique(netflix$show_title))
+
+netflix_shows <- title %>% 
+  filter(primaryTitle %in% (netflix %>% filter(category == "TV") %>% pull(show_title)))
+netflix_movies <- title %>% 
+  filter(primaryTitle %in% (netflix %>% filter(category == "Movie") %>% pull(show_title)))
+
+movie_ratings <- netflix_movies %>%
+  arrange(primaryTitle) %>% 
+  filter(titleType == "movie") %>% 
+  select(tconst, primaryTitle, startYear, genres) %>% 
+  mutate(startYear = as.numeric(startYear)) %>% 
+  group_by(primaryTitle) %>% 
+  filter(startYear == max(startYear)) %>% 
+  left_join(
+    ratings
+  ) %>% 
+  left_join(
+    df$weeks_global %>% 
+      group_by(show_title) %>% 
+      summarise(total_hours = sum(weekly_hours_viewed),
+                total_weeks = max(cumulative_weeks_in_top_10)) %>% 
+      rename(primaryTitle = show_title)
+  )
+
+movie_ratings %>% 
+  ggplot(aes(averageRating, total_hours, label = primaryTitle)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  theme_light() +
+  scale_y_continuous(labels = scales::number_format()) +
+  scale_color_viridis_c(guide = "none") +
+  scale_size_continuous(guide = "none") +
+  labs(x = "Average Movie Rating (Source @imbd)",
+       y = "Total Hours Watched (Source @netflix")
+
+
+#### shows
+show_ratings <- netflix_shows %>% 
+  arrange(primaryTitle) %>%
+  filter(titleType == "tvSeries" |
+           titleType == "tvMiniSeries") %>% 
+  select(tconst, primaryTitle, startYear, genres) %>% 
+  mutate(startYear = as.numeric(startYear)) %>% 
+  group_by(primaryTitle) %>% 
+  filter(startYear == max(startYear, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(
+    episodes %>% 
+      rename(tconst = parentTconst, tconst_epi = tconst)
+  ) %>% 
+  left_join(
+    ratings %>% 
+      rename(tconst_epi = tconst)
+  ) %>% 
+  left_join(
+    df$weeks_global %>% 
+      group_by(show_title) %>% 
+      summarise(total_hours = sum(weekly_hours_viewed),
+                total_weeks = max(cumulative_weeks_in_top_10)) %>% 
+      rename(primaryTitle = show_title)
+  )
+
+show_ratings %>% 
+  mutate(seasonNumber = as.numeric(seasonNumber)) %>% 
+  filter(!is.na(numVotes)) %>% 
+  group_by(primaryTitle) %>% 
+  filter(seasonNumber == max(seasonNumber)) %>% 
+  ungroup() %>% 
+  group_by(primaryTitle, total_hours) %>% 
+  summarise(avg_rating = mean(averageRating, na.rm = TRUE),
+            episodes = n()) %>% 
+  ggplot(aes(avg_rating, total_hours, label = primaryTitle)) +
+  geom_point(aes(size = episodes +0.5)) +
+  geom_point(aes(size = episodes, color = episodes)) +
+  ggrepel::geom_text_repel() +
+  theme_light() +
+  scale_y_continuous(labels = scales::number_format()) +
+  scale_color_viridis_c(guide = "none") +
+  scale_size_continuous(guide = "none") +
+  labs(x = "Average Show Rating (Source @imdb)",
+       y = "Total Hours Watched of current Season (Source @netflix)",
+       )
+
+show_ids <- show_ratings %>% 
+  distinct(tconst) %>% 
+  pull()
 
 create_data <- function(id){
   
@@ -124,16 +221,24 @@ create_plot <- function(data) {
       legend.position = "bottom",
       strip.background =element_rect(fill = "#003d80"),
       strip.text = element_text(colour = 'white', face = "bold")) +
-    labs(title = paste0("Ratings for: ", unique(plot_data$title)),
+    labs(
          x = "Number of Episode",
          y = "Average Rating",
          fill = "") +
     lims(y = c(0, 10))
   
   
-  g1 + g2
+  g1 + g2 + 
+    plot_annotation(title = paste0("Ratings for: ", unique(plot_data$title)),
+                    caption = paste0("Data Source: @imdb, Date: ", format(Sys.Date(), "%b %d, %Y")))
   
 }
+
+
+show_ids[10] %>% 
+  create_data() %>% 
+  create_plot()
+
 
 rick_morty_id <- "tt2861424"
 outlander_id <- "tt3006802"

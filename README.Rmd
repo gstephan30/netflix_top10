@@ -398,5 +398,4 @@ all_graphs <- map2(top_show_ids, c(1:10), function(x, y) create_data(x) %>% crea
 for (i in seq_along(all_graphs)) {
   print(all_graphs[[i]])
 }
-all_graphs[[6]]
 ```

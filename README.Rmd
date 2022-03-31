@@ -22,6 +22,7 @@ library(stringr)
 library(ggplot2)
 library(showtext)
 library(patchwork)
+library(forcats)
 
 font_add_google("Schoolbell", "bell")
 showtext_auto()
@@ -143,9 +144,9 @@ make_graph(data, unique(data$category)[2]) / make_graph(data, unique(data$catego
 ```
 
 
-# Combining with Netflix
+# Combining with imDB
 
-```{r}
+```{r fig.height = 6}
 episodes <- vroom::vroom("https://datasets.imdbws.com/title.episode.tsv.gz", delim = "\t")
 title <- vroom::vroom("https://datasets.imdbws.com/title.basics.tsv.gz", delim = "\t")
 ratings <- vroom::vroom("https://datasets.imdbws.com/title.ratings.tsv.gz", delim = "\t")
@@ -180,12 +181,14 @@ movie_ratings %>%
   ggplot(aes(averageRating, total_hours, label = primaryTitle)) +
   geom_point() +
   ggrepel::geom_text_repel() +
-  theme_light() +
+  #theme_light() +
   scale_y_continuous(labels = scales::number_format()) +
   scale_color_viridis_c(guide = "none") +
   scale_size_continuous(guide = "none") +
   labs(x = "Average Movie Rating (Source @imbd)",
-       y = "Total Hours Watched (Source @netflix")
+       y = "Total Hours Watched (Source @netflix)",
+       title = "Movies - Netflix time watched vs IMDB Ration",
+       subtitle = paste0(format(Sys.Date(), "%b %d, %Y")))
 
 
 #### shows
@@ -228,29 +231,39 @@ show_ratings %>%
   geom_point(aes(size = episodes +0.5)) +
   geom_point(aes(size = episodes, color = episodes)) +
   ggrepel::geom_text_repel() +
-  theme_light() +
+  #theme_light() +
   scale_y_continuous(labels = scales::number_format()) +
   scale_color_viridis_c(guide = "none") +
   scale_size_continuous(guide = "none") +
   labs(x = "Average Show Rating (Source @imdb)",
        y = "Total Hours Watched of current Season (Source @netflix)",
-       )
+       title = "TV Shows - Netflix time watched vs IMDB Ration",
+       subtitle = paste0(format(Sys.Date(), "%b %d, %Y")))
+    
 
 top10_shows <- top_views_per_week %>% 
   slice(1:10) %>% 
+  mutate(rank = 1:n()) %>% 
   filter(category == "TV") %>% 
+  mutate(show_title = as.factor(show_title),
+         show_title = fct_reorder(show_title, rank)) %>% 
   pull(show_title)
 
 top_show_ids <- show_ratings %>%
   filter(primaryTitle %in% top10_shows) %>% 
-  distinct(tconst) %>% 
-  pull()
+  distinct(tconst, top10_shows = primaryTitle) %>% 
+  left_join(
+    tibble(top10_shows) %>% 
+      mutate(rank = 1:n())
+  ) %>% 
+  arrange(rank) %>% 
+  pull(tconst)
 ```
 
 
 # Insprection of Perfromance of Top Shows on Netflix
 
-```{r}
+```{r fig.height=12}
 create_data <- function(id){
   
   #id  <- top_show_ids[1]
@@ -274,7 +287,7 @@ create_data <- function(id){
   return(data)
 }
 
-create_plot <- function(data) {
+create_plot <- function(data, rank = rank) {
   
   #data <- test
   
@@ -362,7 +375,7 @@ create_plot <- function(data) {
     facet_wrap(~season_label, ncol = 1) +
     scale_fill_identity(guide = "legend",
                         labels = c(10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)) +
-    theme_light() +
+    #theme_light() +
     theme(
       legend.position = "bottom",
       strip.background =element_rect(fill = "#003d80"),
@@ -374,17 +387,16 @@ create_plot <- function(data) {
     lims(y = c(0, 10))
   
   
-  g1 + g2 + 
-    plot_annotation(title = paste0("Ratings for: ", unique(plot_data$title)),
+  g <- g1 + g2 + 
+    plot_annotation(title = paste0("Ratings for: Rank ", rank, " - ", unique(plot_data$title)),
                     caption = paste0("Data Source: @imdb, Date: ", format(Sys.Date(), "%b %d, %Y")))
+  return(g)
   
 }
 
-map(top_show_ids, function(x) create_data(x) %>% create_plot)
-
-```
-
-
-```{r}
-
+all_graphs <- map2(top_show_ids, c(1:10), function(x, y) create_data(x) %>% create_plot(data = ., rank = y))
+for (i in seq_along(all_graphs)) {
+  print(all_graphs[[i]])
+}
+all_graphs[[6]]
 ```

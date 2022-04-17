@@ -109,6 +109,8 @@ show_ids <- show_ratings %>%
 
 create_data <- function(id){
   
+  #id <- "tt3006802"
+  
   episodes %>%
     filter(parentTconst == id) %>%
     left_join(
@@ -118,11 +120,11 @@ create_data <- function(id){
     type_convert() %>%
     filter(!is.na(averageRating)) %>% 
     left_join(
-      title.akas %>% 
-        filter(titleId == id) %>% 
-        count(titleId, title, sort = TRUE) %>% 
+      title %>% 
+        filter(tconst == id) %>% 
+        count(titleId, tconst, sort = TRUE) %>% 
         slice(1) %>% 
-        select(parentTconst = titleId, title)
+        select(parentTconst = titleId, tconst)
     ) %>% 
     left_join(
       title

@@ -245,11 +245,14 @@ top10_shows <- top_views_per_week %>%
   slice(1:10) %>% 
   mutate(rank = 1:n()) %>% 
   filter(category == "TV") %>% 
+  # fix dahmer
+  mutate(show_title = ifelse(show_title == "DAHMER", 
+                             "Conversations with a Killer: The Jeffrey Dahmer Tapes", show_title))  %>% 
   mutate(show_title = as.factor(show_title),
-         show_title = fct_reorder(show_title, rank)) %>% 
+         show_title = fct_reorder(show_title, rank)) %>%
   pull(show_title)
 
-top_show_ids <- show_ratings %>%
+top_show_ids <- show_ratings %>% 
   filter(primaryTitle %in% top10_shows) %>% 
   distinct(tconst, top10_shows = primaryTitle) %>% 
   left_join(

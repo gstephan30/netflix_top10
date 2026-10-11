@@ -112,8 +112,10 @@ rating_scatter <- function(d, cat) {
   g <- ggplot2::ggplot(data, ggplot2::aes(imdb_rating, total_hours, label = label))
   g <- if (cat == "TV") {
     g +
-      ggplot2::geom_point(ggplot2::aes(size = episodes + 0.5)) +
-      ggplot2::geom_point(ggplot2::aes(size = episodes, color = episodes)) +
+      ggplot2::geom_point(ggplot2::aes(size = episodes + 0.5), na.rm = TRUE) +
+      ggplot2::geom_point(ggplot2::aes(size = episodes, color = episodes), na.rm = TRUE) +
+      # no episode count for the charting season: still drawn, in grey
+      ggplot2::geom_point(data = \(x) dplyr::filter(x, is.na(episodes)), size = 3, color = "grey50") +
       ggplot2::scale_color_viridis_c(guide = "none") +
       ggplot2::scale_size_continuous(guide = "none")
   } else {

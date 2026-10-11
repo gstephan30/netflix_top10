@@ -35,7 +35,7 @@ viewof week = Inputs.select(weeks, {label: "Week", format: fmtWeek})
 ## Row {height="560px"}
 
 ```{ojs}
-//| include: false
+//| output: false
 db = DuckDBClient.of({
   titles: FileAttachment("data/titles.parquet"),
   global: FileAttachment("data/global.parquet"),
@@ -45,26 +45,26 @@ db = DuckDBClient.of({
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 meta = FileAttachment("data/meta.json").json()
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 weeks = (await db.query(`
   SELECT DISTINCT strftime(week, '%Y-%m-%d') AS week FROM global ORDER BY week DESC
 `)).map(d => d.week)
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 countryList = db.query(`
   SELECT DISTINCT country_iso2 AS iso, country_name AS name FROM countries ORDER BY name
 `)
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 dark = Generators.observe(notify => {
   const check = () => notify(document.body.classList.contains("quarto-dark"));
   check();
@@ -75,7 +75,7 @@ dark = Generators.observe(notify => {
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 pal = dark
   ? {surface: "#1a1a19", ink: "#f0efec", ink2: "#c3c2b7", muted: "#898781", grid: "#2c2c2a",
      series: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
@@ -86,39 +86,39 @@ pal = dark
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 kindColor = Object.fromEntries([["TV", pal.series[0]], ["Film", pal.series[1]]])
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 fmtCompact = v => v == null ? "–" : d3.format(".3~s")(v).replace("G", "B")
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 fmtInt = v => v == null ? "–" : d3.format(",")(v)
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 fmtWeek = w => w ? d3.utcFormat("%b %-d, %Y")(d3.utcParse("%Y-%m-%d")(w)) : "–"
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 parseWeek = d3.utcParse("%Y-%m-%d")
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 imdbLink = (tconst, label) => /^tt\d{7,9}$/.test(tconst ?? "")
   ? htl.html`<a href="https://www.imdb.com/title/${tconst}/" target="_blank" rel="noopener noreferrer">${label}</a>`
   : htl.html`<span>${label}</span>`
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 ratingCell = d => d.imdb_rating == null
   ? htl.html`<span class="note">no match</span>`
   : htl.html`<span>${imdbLink(d.tconst, d.imdb_rating.toFixed(1))}
@@ -127,19 +127,19 @@ ratingCell = d => d.imdb_rating == null
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 stat = (label, value, sub = "") => htl.html`<div class="stat">
   <div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 seasonShort = d => !d.season_title ? "" :
   d.season_title.startsWith(d.show_title + ": ") ? d.season_title.slice(d.show_title.length + 2) : d.season_title
 ```
 
 ```{ojs}
-//| include: false
+//| output: false
 plotStyle = Object.fromEntries([
   ["background", "transparent"], ["color", pal.ink2],
   ["fontSize", "12px"], ["fontFamily", "system-ui, sans-serif"]
@@ -148,7 +148,7 @@ plotStyle = Object.fromEntries([
 
 
 ```{ojs}
-//| include: false
+//| output: false
 top10 = region === "GLOBAL"
   ? db.sql`
       SELECT g.weekly_rank AS rank, g.title_id, g.show_title, g.season_title,
@@ -208,12 +208,64 @@ region !== "GLOBAL"
     : htl.html`<p class="note">This week predates Netflix's views metric (June 2023); hours viewed are in the table.</p>`
 ```
 
+# This week
+
+```{r}
+#| include: false
+source("../R/charts.R")
+chart_setup()
+d <- read_chart_data()
+shows <- episode_shows(d)
+knitr::opts_chunk$set(fig.showtext = TRUE, dpi = 72)
+```
+
+## Row {height="1250px"}
+
+```{r}
+#| title: Weekly performance
+#| fig-width: 12
+#| fig-height: 16
+patchwork::wrap_plots(make_graph(d, "TV"), make_graph(d, "Film"), ncol = 1)
+```
+
+## Row {height="800px"}
+
+```{r}
+#| title: Movies – Netflix vs IMDb
+#| fig-width: 12
+#| fig-height: 7
+rating_scatter(d, "Film")
+```
+
+## Row {height="800px"}
+
+```{r}
+#| title: TV shows – Netflix vs IMDb
+#| fig-width: 12
+#| fig-height: 7
+rating_scatter(d, "TV")
+```
+
+## Row {.tabset height="1100px"}
+
+```{r}
+#| output: asis
+for (i in seq_len(nrow(shows))) {
+  s <- shows[i, ]
+  height <- max(9, min(24, 0.45 * max(s$max_ep + 1, 3 * s$n_seasons) + 5))
+  cat(knitr::knit_child(quiet = TRUE, text = c(
+    sprintf("```{r}\n#| title: \"%d. %s\"\n#| fig-width: 12\n#| fig-height: %.1f", i, gsub('"', "'", s$show_title), height),
+    sprintf("create_data(d, \"%s\") |> create_plot(\"%s\", %d)\n```", s$tconst, gsub('"', '\\\\"', s$show_title), i)
+  )), sep = "\n")
+}
+```
+
 # Title explorer
 
 ## {.toolbar}
 
 ```{ojs}
-//| include: false
+//| output: false
 showOptions = db.query(`
   SELECT show_title, kind,
          sum(coalesce(total_hours, 0)) AS hours, sum(country_weeks) AS cw
@@ -234,7 +286,7 @@ viewof metric = Inputs.radio(new Map([["Views", "views"], ["Hours viewed", "hour
 ## Row {height="150px"}
 
 ```{ojs}
-//| include: false
+//| output: false
 picked = showIndex.get(showPick) ?? showIndex.get(defaultShow)
 seasons = db.sql`
   SELECT * FROM titles WHERE show_title = ${picked.show_title} AND kind = ${picked.kind}
@@ -375,7 +427,7 @@ viewof minVotes = Inputs.select([0, 100, 1000, 10000], {label: "Min. IMDb votes"
 ## Row {height="150px"}
 
 ```{ojs}
-//| include: false
+//| output: false
 scatterAll = db.query(`
   SELECT kind, language, show_title, tconst, any_value(imdb_rating) AS imdb_rating,
          any_value(imdb_votes) AS imdb_votes, any_value(match_confidence) AS match_confidence,
@@ -453,7 +505,7 @@ viewof rankMetric = Inputs.radio(new Map([["Avg weekly views (since Jun 2023)", 
 ## Row
 
 ```{ojs}
-//| include: false
+//| output: false
 ranking = db.query(`
   SELECT title_id, kind, language, show_title, season_title, strftime(first_week, '%Y-%m-%d') AS first_week,
          weeks_global, best_rank_global, avg_views_per_week, avg_hours_per_week, total_views, total_hours,

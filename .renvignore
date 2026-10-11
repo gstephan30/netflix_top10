@@ -1,2 +1,4 @@
-dashboard/
 cache/
+dashboard/_site/
+dashboard/data/
+dashboard/.quarto/

@@ -6,6 +6,7 @@ with [IMDb ratings](https://developer.imdb.com/non-commercial-datasets/), rebuil
 **Live:** https://gstephan30.github.io/netflix_top10/
 
 - **Weekly Top 10** – any week since July 2021, globally or for 94 countries, with views, hours and IMDb rating
+- **This week** – ggplot charts of the current global Top 10: weekly views, Netflix vs IMDb, episode rating grids
 - **Title explorer** – weekly views per season, rank heatmap per country, IMDb rating per episode
 - **Netflix vs IMDb** – does what people rate predict what they watch?
 - **All-time ranking** – per season / film, never summed across seasons
@@ -27,6 +28,7 @@ IMDb TSVs  ────┘                                   └─ matches.csv,
 | Metrics | `build_titles()` | one row per season / film; views = Netflix's metric since June 2023 |
 | IMDb matching | `R/imdb.R` | scoring model, see below |
 | Export | `R/export.R` | Parquet (zstd) + reconciliation checks |
+| Charts | `R/charts.R` | ggplot2 + patchwork, Schoolbell font (`dashboard/fonts/`), rendered at build time |
 | Dashboard | `dashboard/index.qmd` | static site, queries run in the browser |
 
 ### Matching Netflix titles to IMDb

@@ -1,0 +1,36 @@
+kind,show_title,tconst,expect,note
+TV,Squid Game,tt10919420,match,Korean original title differs (language signal)
+TV,Stranger Things,tt4574334,match,
+TV,Wednesday,tt13443470,match,
+TV,Bridgerton,tt8740790,match,
+TV,The Witcher,tt5180504,match,
+TV,Money Heist,tt6468322,match,IMDb original title La casa de papel
+TV,Lupin,tt2531336,match,
+TV,Suits,tt1632701,match,licensed catalogue: season 1 aired 10 years before charting
+TV,Yellowstone,tt4236770,match,
+TV,Ozark,tt5071412,match,
+TV,The Crown,tt4786824,match,
+TV,Cobra Kai,tt7221388,match,
+TV,Outlander,tt3006802,match,
+TV,Adolescence,tt31806037,match,
+TV,Baby Reindeer,tt13649112,match,
+TV,ONE PIECE,tt11737520,match,many One Piece titles (anime 1999 vs live action 2023)
+TV,Avatar: The Last Airbender,tt9018736,match,2024 live action vs 2005 animation
+TV,DAN DA DAN,tt30217403,match,IMDb spells it Dandadan (compact key)
+TV,True Beauty,tt13274038,match,
+TV,DAHMER,tt13207736,match,IMDb lists the anthology as Monster
+TV,Monsters,tt13207736,match,season 2 of the Monster anthology
+TV,Raw,tt0185103,match,manual override (WWE Monday Night RAW)
+TV,Raw,tt13777028,not,AKA trap: unrelated K-drama
+Film,KPop Demon Hunters,tt14205554,match,
+Film,Red Notice,tt7991608,match,
+Film,Don't Look Up,tt11286314,match,
+Film,The Gray Man,tt1649418,match,
+Film,Extraction,tt8936646,match,
+Film,Extraction 2,tt12263384,match,IMDb primary title Extraction II
+Film,Leave the World Behind,tt12747748,match,
+Film,Frankenstein,tt1312221,match,2025 del Toro among many older Frankensteins (runtime)
+Film,Society of the Snow,tt16277242,match,
+Film,Jawan: Extended Cut,tt15354916,match,Netflix packaging suffix stripped
+Film,Dream,tt11122698,match,Korean film 2023 (language signal)
+Film,Dream,tt4846340,not,AKA trap: Hidden Figures

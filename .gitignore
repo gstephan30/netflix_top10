@@ -1,4 +1,12 @@
+# R / RStudio
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+
+# pipeline: downloads and build output (rebuilt weekly in CI)
+cache/
+dashboard/data/
+dashboard/_site/
+dashboard/.quarto/
+dashboard/index_files/

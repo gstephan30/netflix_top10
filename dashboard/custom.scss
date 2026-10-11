@@ -1,0 +1,100 @@
+/*-- scss:defaults --*/
+$font-family-sans-serif: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+// no Google Fonts request (privacy / GDPR): Bootswatch themes import them by default
+$web-font-path: false;
+
+/*-- scss:rules --*/
+// Chart chrome tokens (validated palette, see R/README): light defaults,
+// dark values when Quarto's dark toggle is active.
+:root {
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+}
+body.quarto-dark {
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+.stat {
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--grid);
+}
+.stat .label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.stat .value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.stat .sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.note {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+.badge-conf {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0 0.35rem;
+  border-radius: 4px;
+  border: 1px solid var(--grid);
+  color: var(--text-secondary);
+  margin-left: 0.25rem;
+}
+.legend-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+.legend-keys .key {
+  display: inline-block;
+  width: 14px;
+  height: 2px;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.legend-keys .dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 0.35rem;
+}
+.scroll-x {
+  overflow-x: auto;
+}
+// Plot colour legends ship an inline white background; follow the theme instead
+svg[class*="-ramp"] {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+}
+// Plot tooltips follow the theme
+g[aria-label="tip"] path {
+  fill: var(--surface-1);
+}

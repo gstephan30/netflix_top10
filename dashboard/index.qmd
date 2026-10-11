@@ -1,0 +1,532 @@
+---
+title: "Netflix Top 10 × IMDb"
+include-in-header:
+  text: |
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%232a78d6'/%3E%3Cpath d='M4 12V4h2l4 5V4h2v8h-2L6 7v5z' fill='white'/%3E%3C/svg%3E">
+format:
+  dashboard:
+    orientation: rows
+    scrolling: true
+    nav-buttons:
+      - icon: github
+        href: https://github.com/gstephan30/netflix_top10
+    theme:
+      light: [cosmo, custom.scss]
+      dark: [darkly, custom.scss]
+---
+
+
+# Weekly Top 10
+
+## {.toolbar}
+
+```{ojs}
+viewof region = Inputs.select(
+  new Map([["🌐 Global", "GLOBAL"], ...countryList.map(c => [c.name, c.iso])]),
+  {label: "Region"}
+)
+viewof kind = Inputs.radio(new Map([["TV", "TV"], ["Films", "Film"]]), {label: "Category", value: "TV"})
+viewof language = Inputs.radio(["English", "Non-English"], {
+  label: "Language", value: "English", disabled: region !== "GLOBAL"
+})
+viewof week = Inputs.select(weeks, {label: "Week", format: fmtWeek})
+```
+
+## Row {height="560px"}
+
+```{ojs}
+//| include: false
+db = DuckDBClient.of({
+  titles: FileAttachment("data/titles.parquet"),
+  global: FileAttachment("data/global.parquet"),
+  countries: FileAttachment("data/countries.parquet"),
+  episodes: FileAttachment("data/episodes.parquet")
+})
+```
+
+```{ojs}
+//| include: false
+meta = FileAttachment("data/meta.json").json()
+```
+
+```{ojs}
+//| include: false
+weeks = (await db.query(`
+  SELECT DISTINCT strftime(week, '%Y-%m-%d') AS week FROM global ORDER BY week DESC
+`)).map(d => d.week)
+```
+
+```{ojs}
+//| include: false
+countryList = db.query(`
+  SELECT DISTINCT country_iso2 AS iso, country_name AS name FROM countries ORDER BY name
+`)
+```
+
+```{ojs}
+//| include: false
+dark = Generators.observe(notify => {
+  const check = () => notify(document.body.classList.contains("quarto-dark"));
+  check();
+  const mo = new MutationObserver(check);
+  mo.observe(document.body, {attributes: true, attributeFilter: ["class"]});
+  return () => mo.disconnect();
+})
+```
+
+```{ojs}
+//| include: false
+pal = dark
+  ? {surface: "#1a1a19", ink: "#f0efec", ink2: "#c3c2b7", muted: "#898781", grid: "#2c2c2a",
+     series: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
+     seqLo: "#cde2fb", seqHi: "#256abf", divLo: "#e66767", divMid: "#383835", divHi: "#3987e5"}
+  : {surface: "#fcfcfb", ink: "#0b0b0b", ink2: "#52514e", muted: "#898781", grid: "#e1e0d9",
+     series: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"],
+     seqLo: "#0d366b", seqHi: "#86b6ef", divLo: "#e34948", divMid: "#f0efec", divHi: "#2a78d6"}
+```
+
+```{ojs}
+//| include: false
+kindColor = Object.fromEntries([["TV", pal.series[0]], ["Film", pal.series[1]]])
+```
+
+```{ojs}
+//| include: false
+fmtCompact = v => v == null ? "–" : d3.format(".3~s")(v).replace("G", "B")
+```
+
+```{ojs}
+//| include: false
+fmtInt = v => v == null ? "–" : d3.format(",")(v)
+```
+
+```{ojs}
+//| include: false
+fmtWeek = w => w ? d3.utcFormat("%b %-d, %Y")(d3.utcParse("%Y-%m-%d")(w)) : "–"
+```
+
+```{ojs}
+//| include: false
+parseWeek = d3.utcParse("%Y-%m-%d")
+```
+
+```{ojs}
+//| include: false
+imdbLink = (tconst, label) => /^tt\d{7,9}$/.test(tconst ?? "")
+  ? htl.html`<a href="https://www.imdb.com/title/${tconst}/" target="_blank" rel="noopener noreferrer">${label}</a>`
+  : htl.html`<span>${label}</span>`
+```
+
+```{ojs}
+//| include: false
+ratingCell = d => d.imdb_rating == null
+  ? htl.html`<span class="note">no match</span>`
+  : htl.html`<span>${imdbLink(d.tconst, d.imdb_rating.toFixed(1))}
+      <span class="note">(${fmtCompact(d.imdb_votes)})</span>${
+      d.match_confidence === "low" ? htl.html`<span class="badge-conf" title="uncertain IMDb match">?</span>` : ""}</span>`
+```
+
+```{ojs}
+//| include: false
+stat = (label, value, sub = "") => htl.html`<div class="stat">
+  <div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`
+```
+
+```{ojs}
+//| include: false
+seasonShort = d => !d.season_title ? "" :
+  d.season_title.startsWith(d.show_title + ": ") ? d.season_title.slice(d.show_title.length + 2) : d.season_title
+```
+
+```{ojs}
+//| include: false
+plotStyle = Object.fromEntries([
+  ["background", "transparent"], ["color", pal.ink2],
+  ["fontSize", "12px"], ["fontFamily", "system-ui, sans-serif"]
+])
+```
+
+
+```{ojs}
+//| include: false
+top10 = region === "GLOBAL"
+  ? db.sql`
+      SELECT g.weekly_rank AS rank, g.title_id, g.show_title, g.season_title,
+             g.weekly_views, g.weekly_hours_viewed, g.cumulative_weeks_in_top_10 AS weeks,
+             t.tconst, t.imdb_rating, t.imdb_votes, t.match_confidence
+      FROM global g JOIN titles t USING (title_id)
+      WHERE g.week = CAST(${week} AS DATE) AND g.kind = ${kind} AND g.language = ${language}
+      ORDER BY rank`
+  : db.sql`
+      SELECT c.weekly_rank AS rank, c.title_id, c.show_title, c.season_title,
+             NULL AS weekly_views, NULL AS weekly_hours_viewed,
+             c.cumulative_weeks_in_top_10 AS weeks,
+             t.tconst, t.imdb_rating, t.imdb_votes, t.match_confidence
+      FROM countries c JOIN titles t USING (title_id)
+      WHERE c.week = CAST(${week} AS DATE) AND c.kind = ${kind} AND c.country_iso2 = ${region}
+      ORDER BY rank`
+top10Rows = top10.map(d => ({...d, season: seasonShort(d),
+  label: `${d.rank}. ${d.show_title}${seasonShort(d) && seasonShort(d) !== "Limited Series" ? " · " + seasonShort(d) : ""}`}))
+regionName = region === "GLOBAL" ? `Global · ${language}` : countryList.find(c => c.iso === region)?.name
+```
+
+```{ojs}
+//| title: Top 10
+//| width: 58%
+htl.html`<div class="note">${regionName} · ${kind === "TV" ? "TV" : "Films"} · week ending ${fmtWeek(week)}.
+  ${region === "GLOBAL" ? "Views = hours viewed ÷ runtime (Netflix's ranking metric, available since June 2023)." : "Netflix publishes ranks only (no viewing figures) per country."}</div>`
+Inputs.table(top10Rows, {
+  columns: ["rank", "show_title", "season", "weeks", ...(region === "GLOBAL" ? ["weekly_views", "weekly_hours_viewed"] : []), "imdb_rating"],
+  header: {rank: "#", show_title: "Title", season: "Season", weeks: "Weeks",
+           weekly_views: "Views", weekly_hours_viewed: "Hours viewed", imdb_rating: "IMDb"},
+  format: {
+    weekly_views: fmtCompact, weekly_hours_viewed: fmtCompact,
+    imdb_rating: (_, i, data) => ratingCell(data[i])
+  },
+  width: {rank: 32, weeks: 60, weekly_views: 70, weekly_hours_viewed: 90, imdb_rating: 110},
+  align: {rank: "right", weeks: "right"},
+  rows: 11, select: false, layout: "auto"
+})
+```
+
+```{ojs}
+//| title: Views this week
+region !== "GLOBAL"
+  ? htl.html`<p class="note">Viewing figures are only published for the global lists. Switch the region to Global.</p>`
+  : top10.some(d => d.weekly_views != null)
+    ? Plot.plot({
+        style: plotStyle, marginLeft: 230, marginRight: 50, height: 340, width: Math.max(420, width / 2 - 60),
+        x: {label: "Views", tickFormat: fmtCompact, grid: true},
+        y: {label: null, domain: top10Rows.map(d => d.label), tickFormat: s => s.length > 36 ? s.slice(0, 35) + "…" : s},
+        marks: [
+          Plot.barX(top10Rows, {x: "weekly_views", y: "label", fill: kindColor[kind], rx: 2, insetTop: 4, insetBottom: 4,
+                            tip: {format: {x: fmtCompact}}}),
+          Plot.text(top10Rows, {x: "weekly_views", y: "label", text: d => fmtCompact(d.weekly_views), dx: 4, textAnchor: "start", fill: pal.ink2}),
+          Plot.ruleX([0], {stroke: pal.grid})
+        ]
+      })
+    : htl.html`<p class="note">This week predates Netflix's views metric (June 2023); hours viewed are in the table.</p>`
+```
+
+# Title explorer
+
+## {.toolbar}
+
+```{ojs}
+//| include: false
+showOptions = db.query(`
+  SELECT show_title, kind,
+         sum(coalesce(total_hours, 0)) AS hours, sum(country_weeks) AS cw
+  FROM titles GROUP BY ALL ORDER BY hours DESC, cw DESC`)
+showLabel = d => `${d.show_title} (${d.kind === "TV" ? "TV" : "Film"})`
+showIndex = new Map(showOptions.map(d => [showLabel(d), d]))
+defaultShow = showLabel(showOptions[0])
+```
+
+```{ojs}
+viewof showPick = Inputs.text({
+  label: "Title", placeholder: "Start typing a show or film…",
+  datalist: showOptions.map(showLabel), value: defaultShow, submit: "Show", width: 420
+})
+viewof metric = Inputs.radio(new Map([["Views", "views"], ["Hours viewed", "hours"]]), {label: "Metric", value: "views"})
+```
+
+## Row {height="150px"}
+
+```{ojs}
+//| include: false
+picked = showIndex.get(showPick) ?? showIndex.get(defaultShow)
+seasons = db.sql`
+  SELECT * FROM titles WHERE show_title = ${picked.show_title} AND kind = ${picked.kind}
+  ORDER BY first_week`
+showGlobal = db.sql`
+  SELECT strftime(week, '%Y-%m-%d') AS week, coalesce(season_title, show_title) AS season,
+         language, weekly_rank, weekly_views, weekly_hours_viewed
+  FROM global WHERE show_title = ${picked.show_title} AND kind = ${picked.kind}
+  ORDER BY week`
+showCountries = db.sql`
+  SELECT strftime(week, '%Y-%m-%d') AS week, country_name, weekly_rank,
+         coalesce(season_title, show_title) AS season
+  FROM countries WHERE show_title = ${picked.show_title} AND kind = ${picked.kind}`
+tconst = seasons.find(d => d.tconst)?.tconst ?? null
+match = seasons.find(d => d.tconst) ?? null
+episodes = tconst && picked.kind === "TV"
+  ? db.sql`SELECT * FROM episodes WHERE tconst = ${tconst} ORDER BY season, episode`
+  : []
+```
+
+```{ojs}
+htl.html`<div class="stat-row">
+  ${stat("Weeks in global Top 10", fmtInt(d3.sum(seasons, d => d.weeks_global ?? 0)),
+         `${seasons.length} season${seasons.length === 1 ? "" : "s"} / entries`)}
+  ${stat("Best global rank", d3.min(seasons, d => d.best_rank_global) ?? "–", "global list")}
+  ${stat("Peak weekly views", fmtCompact(d3.max(seasons, d => d.peak_views)), "since Jun 2023")}
+  ${stat("Countries reached", fmtInt(new Set(showCountries.map(d => d.country_name)).size),
+         `${fmtInt(showCountries.filter(d => d.weekly_rank === 1).length)} country-weeks at #1`)}
+  ${stat("IMDb rating", match?.imdb_rating != null ? imdbLink(match.tconst, match.imdb_rating.toFixed(1)) : "–",
+         match ? `${fmtCompact(match.imdb_votes)} votes · ${match.imdb_title} (${match.imdb_year}) · match: ${match.match_confidence}` : "no IMDb match")}
+</div>`
+```
+
+## Row {height="440px"}
+
+```{ojs}
+//| title: Global performance by week
+{
+  const key = metric === "views" ? "weekly_views" : "weekly_hours_viewed";
+  const rows = showGlobal.filter(d => d[key] != null).map(d => ({...d, date: parseWeek(d.week), value: d[key]}));
+  if (!rows.length) return htl.html`<p class="note">${showGlobal.length
+    ? "No views reported for these weeks (Netflix publishes views since June 2023) – switch to hours viewed."
+    : "This title never reached the global Top 10; see the country chart."}</p>`;
+  // fixed categorical order by first appearance, at most 8 series
+  const order = d3.groupSort(rows, v => d3.min(v, d => d.date), d => d.season);
+  const total = d3.rollup(rows, v => d3.sum(v, d => d.value), d => d.season);
+  const shown = order.length > 8 ? order.filter(s => [...total].sort((a, b) => b[1] - a[1]).slice(0, 8).map(d => d[0]).includes(s)) : order;
+  const data = rows.filter(d => shown.includes(d.season));
+  const color = d3.scaleOrdinal(shown, pal.series);
+  return htl.html`<div>
+    ${shown.length > 1 ? htl.html`<div class="legend-keys">${shown.map(s => htl.html`<span><span class="key" style="background:${color(s)}"></span>${s}</span>`)}</div>` : ""}
+    ${order.length > 8 ? htl.html`<div class="note">Showing the 8 most-watched of ${order.length} entries.</div>` : ""}
+    ${Plot.plot({
+      style: plotStyle, height: 300, marginLeft: 56, width: Math.max(480, width - 80),
+      x: {type: "utc", label: null},
+      y: {label: metric === "views" ? "Weekly views" : "Weekly hours viewed", tickFormat: fmtCompact, grid: true, zero: true},
+      marks: [
+        Plot.lineY(data, {x: "date", y: "value", z: "season", stroke: d => color(d.season), strokeWidth: 2, curve: "monotone-x"}),
+        Plot.dot(data, {x: "date", y: "value", fill: d => color(d.season), stroke: pal.surface, strokeWidth: 2, r: 4}),
+        Plot.tip(data, Plot.pointerX({x: "date", y: "value",
+          title: d => `${d.season}\nweek ending ${fmtWeek(d.week)}\n${fmtCompact(d.value)} ${metric === "views" ? "views" : "hours"} · #${d.weekly_rank} (${d.language})`}))
+      ]
+    })}</div>`;
+}
+```
+
+## Row {height="1000px"}
+
+```{ojs}
+//| title: Rank by country and week
+{
+  if (!showCountries.length) return htl.html`<p class="note">No country Top 10 entries.</p>`;
+  const rows = showCountries.map(d => ({...d, date: parseWeek(d.week)}));
+  const byCountry = d3.rollup(rows, v => v.length, d => d.country_name);
+  const countriesSorted = [...byCountry].sort((a, b) => b[1] - a[1] || d3.ascending(a[0], b[0])).map(d => d[0]);
+  const weeksSorted = [...new Set(rows.map(d => d.week))].sort();
+  const cell = Math.max(10, Math.min(22, Math.floor(1000 / weeksSorted.length)));
+  return htl.html`<div class="scroll-x">${Plot.plot({
+    style: plotStyle,
+    width: Math.max(640, 140 + weeksSorted.length * cell),
+    height: 40 + countriesSorted.length * 14,
+    marginLeft: 140, marginTop: 30,
+    padding: 0.08,
+    x: {domain: weeksSorted, label: null, axis: "top",
+        ticks: weeksSorted.filter((w, i) => i % Math.ceil(weeksSorted.length / 10) === 0),
+        tickFormat: w => d3.utcFormat("%b %-d '%y")(parseWeek(w))},
+    y: {domain: countriesSorted, label: null},
+    color: {type: "linear", domain: [1, 10], range: [pal.seqLo, pal.seqHi], legend: true, label: "Weekly rank (1 = strongest colour)", ticks: 10, tickFormat: "d"},
+    marks: [
+      Plot.cell(rows, {x: "week", y: "country_name", fill: "weekly_rank", rx: 2,
+        tip: true, title: d => `${d.country_name}\nweek ending ${fmtWeek(d.week)}\n#${d.weekly_rank} · ${d.season}`})
+    ]
+  })}</div>`;
+}
+```
+
+```{ojs}
+//| title: IMDb rating per episode
+{
+  if (picked.kind !== "TV") return htl.html`<p class="note">Episode ratings apply to series only.</p>`;
+  if (!episodes.length) return htl.html`<p class="note">${tconst ? "No rated episodes on IMDb." : "No IMDb match for this show."}</p>`;
+  const med = d3.median(episodes, d => d.rating);
+  const dev = Math.max(0.5, Math.min(2.5, d3.max(episodes, d => Math.abs(d.rating - med))));
+  const maxEp = d3.max(episodes, d => d.episode);
+  const seasonsN = new Set(episodes.map(d => d.season)).size;
+  const cell = Math.max(14, Math.min(34, Math.floor(900 / maxEp)));
+  const showText = cell >= 26;
+  return htl.html`<div>
+    <div class="note">Episodes across, seasons down. Colour shows each episode against the show's median rating (${med.toFixed(1)}): blue above, red below. ${match ? htl.html`IMDb: ${imdbLink(tconst, match.imdb_title)}, match confidence ${match.match_confidence}.` : ""}</div>
+    <div class="scroll-x">${Plot.plot({
+      style: plotStyle,
+      width: Math.max(360, 70 + maxEp * cell), height: 50 + seasonsN * Math.max(cell, 18),
+      marginLeft: 60, padding: 0.06,
+      x: {type: "band", label: null, axis: "top", tickFormat: e => maxEp > 30 && e % 5 ? "" : e},
+      y: {type: "band", label: null, tickFormat: s => `S${s}`},
+      color: {type: "linear", domain: [Math.max(1, med - dev), med, Math.min(10, med + dev)], range: [pal.divLo, pal.divMid, pal.divHi], clamp: true, legend: true, label: "IMDb rating"},
+      marks: [
+        Plot.cell(episodes, {x: "episode", y: "season", fill: "rating", rx: 2,
+          tip: true, title: d => `S${d.season}E${d.episode} · ${d.episode_title ?? ""}\n★ ${d.rating.toFixed(1)} (${fmtInt(d.votes)} votes)${d.year ? " · " + d.year : ""}`}),
+        showText ? Plot.text(episodes, {x: "episode", y: "season", text: d => d.rating.toFixed(1), fontSize: 10,
+          fill: d => Math.abs(d.rating - med) > dev * 0.6 ? "#ffffff" : pal.ink}) : null
+      ]
+    })}</div></div>`;
+}
+```
+
+# Netflix vs IMDb
+
+## {.toolbar}
+
+```{ojs}
+viewof scatterKinds = Inputs.checkbox(new Map([["TV", "TV"], ["Films", "Film"]]), {label: "Category", value: ["TV", "Film"]})
+viewof scatterLang = Inputs.select(["All", "English", "Non-English"], {label: "Language"})
+viewof matchQuality = Inputs.radio(["High only", "High + medium"], {label: "Match quality", value: "High + medium"})
+viewof minVotes = Inputs.select([0, 100, 1000, 10000], {label: "Min. IMDb votes", value: 1000, format: fmtInt})
+```
+
+## Row {height="150px"}
+
+```{ojs}
+//| include: false
+scatterAll = db.query(`
+  SELECT kind, language, show_title, tconst, any_value(imdb_rating) AS imdb_rating,
+         any_value(imdb_votes) AS imdb_votes, any_value(match_confidence) AS match_confidence,
+         sum(total_views) / sum(weeks_with_views) AS views_per_week,
+         sum(weeks_with_views) AS weeks
+  FROM titles
+  WHERE weeks_with_views > 0 AND imdb_rating IS NOT NULL
+  GROUP BY kind, language, show_title, tconst`)
+scatter = scatterAll.filter(d =>
+  scatterKinds.includes(d.kind) &&
+  (scatterLang === "All" || d.language === scatterLang) &&
+  (matchQuality === "High only" ? ["high", "manual"] : ["high", "medium", "manual"]).includes(d.match_confidence) &&
+  d.imdb_votes >= minVotes)
+spearman = (rows, a, b) => {
+  const rank = key => {
+    const sorted = rows.map((d, i) => [d[key], i]).sort((x, y) => x[0] - y[0]);
+    const r = new Array(rows.length);
+    for (let i = 0; i < sorted.length;) {
+      let j = i; while (j + 1 < sorted.length && sorted[j + 1][0] === sorted[i][0]) j++;
+      for (let k = i; k <= j; k++) r[sorted[k][1]] = (i + j) / 2;
+      i = j + 1;
+    }
+    return r;
+  };
+  const ra = rank(a), rb = rank(b), ma = d3.mean(ra), mb = d3.mean(rb);
+  const cov = d3.sum(ra, (v, i) => (v - ma) * (rb[i] - mb));
+  return cov / Math.sqrt(d3.sum(ra, v => (v - ma) ** 2) * d3.sum(rb, v => (v - mb) ** 2));
+}
+rho = scatter.length > 2 ? spearman(scatter, "imdb_rating", "views_per_week") : NaN
+```
+
+```{ojs}
+htl.html`<div class="stat-row">
+  ${stat("Titles", fmtInt(scatter.length), "with views and an IMDb match")}
+  ${stat("Spearman ρ", isNaN(rho) ? "–" : rho.toFixed(2), "IMDb rating vs. weekly views")}
+  ${stat("Median IMDb rating", scatter.length ? d3.median(scatter, d => d.imdb_rating).toFixed(1) : "–", "of charting titles")}
+  ${stat("Median weekly views", fmtCompact(d3.median(scatter, d => d.views_per_week)), "while in the global Top 10")}
+</div>`
+```
+
+## Row {height="620px"}
+
+```{ojs}
+//| title: Does IMDb taste predict Netflix viewing?
+htl.html`<div>
+  <div class="legend-keys">${scatterKinds.map(k => htl.html`<span><span class="dot" style="background:${kindColor[k]}"></span>${k === "TV" ? "TV shows" : "Films"}</span>`)}</div>
+  ${Plot.plot({
+    style: plotStyle, height: 480, marginLeft: 56, width: Math.max(480, width - 80),
+    x: {label: "IMDb rating →", domain: [1, 10], grid: true},
+    y: {label: "↑ Avg weekly views while in global Top 10", type: "log", tickFormat: fmtCompact, grid: true},
+    marks: [
+      Plot.dot(scatter, {x: "imdb_rating", y: "views_per_week", fill: d => kindColor[d.kind], fillOpacity: 0.65,
+                         stroke: pal.surface, strokeWidth: 1, r: 4}),
+      Plot.tip(scatter, Plot.pointer({x: "imdb_rating", y: "views_per_week", maxRadius: 24,
+        title: d => `${d.show_title} (${d.kind === "TV" ? "TV" : "Film"}, ${d.language})\n★ ${d.imdb_rating.toFixed(1)} · ${fmtCompact(d.imdb_votes)} votes\n${fmtCompact(d.views_per_week)} views / week · ${d.weeks} weeks`}))
+    ]
+  })}
+  <div class="note">One dot per show or film; views since June 2023, summed over all seasons that charted. ${
+    isNaN(rho) ? "" : Math.abs(rho) < 0.1 ? `Spearman ρ = ${rho.toFixed(2)}: no relationship between IMDb rating and viewing.`
+    : rho < 0 ? `Spearman ρ = ${rho.toFixed(2)}: higher-rated titles are, if anything, watched slightly less – audience reach and critic-style taste diverge.`
+    : `Spearman ρ = ${rho.toFixed(2)}: higher-rated titles tend to be watched more.`}</div>
+</div>`
+```
+
+# All-time ranking
+
+## {.toolbar}
+
+```{ojs}
+viewof rankKind = Inputs.radio(new Map([["TV", "TV"], ["Films", "Film"]]), {label: "Category", value: "TV"})
+viewof rankLang = Inputs.select(["All", "English", "Non-English"], {label: "Language"})
+viewof rankMetric = Inputs.radio(new Map([["Avg weekly views (since Jun 2023)", "avg_views_per_week"], ["Avg weekly hours (since Jul 2021)", "avg_hours_per_week"]]), {label: "Rank by", value: "avg_views_per_week"})
+```
+
+## Row
+
+```{ojs}
+//| include: false
+ranking = db.query(`
+  SELECT title_id, kind, language, show_title, season_title, strftime(first_week, '%Y-%m-%d') AS first_week,
+         weeks_global, best_rank_global, avg_views_per_week, avg_hours_per_week, total_views, total_hours,
+         countries_reached, tconst, imdb_rating, imdb_votes, match_confidence
+  FROM titles WHERE weeks_global > 0`)
+rankingFiltered = ranking
+  .filter(d => d.kind === rankKind && (rankLang === "All" || d.language === rankLang) && d[rankMetric] != null)
+  .sort((a, b) => b[rankMetric] - a[rankMetric])
+  .map((d, i) => ({pos: i + 1, ...d, season: seasonShort(d)}))
+```
+
+```{ojs}
+//| title: Ranked per season / film – never summed across seasons
+viewof rankSearch = Inputs.search(rankingFiltered, {placeholder: "Search titles…"})
+Inputs.table(rankSearch, {
+  columns: ["pos", "show_title", "season", "language", "first_week", "weeks_global", "best_rank_global", rankMetric, "countries_reached", "imdb_rating"],
+  header: {pos: "#", show_title: "Title", season: "Season", language: "Language", first_week: "First week",
+           weeks_global: "Weeks", best_rank_global: "Best rank", avg_views_per_week: "Avg views / week",
+           avg_hours_per_week: "Avg hours / week", countries_reached: "Countries", imdb_rating: "IMDb"},
+  format: {first_week: fmtWeek, avg_views_per_week: fmtCompact,
+           avg_hours_per_week: fmtCompact, imdb_rating: (_, i, data) => ratingCell(data[i])},
+  sort: "pos", rows: 25, select: false, layout: "auto"
+})
+```
+
+# About
+
+## Row {height="150px"}
+
+```{ojs}
+htl.html`<div class="stat-row">
+  ${stat("Data through", fmtWeek(meta.latest_week), `since ${fmtWeek(meta.first_week)}`)}
+  ${stat("Global chart rows", fmtInt(meta.rows.global), "weeks × categories × ranks")}
+  ${stat("Country chart rows", fmtInt(meta.rows.countries), "94 countries")}
+  ${stat("Built", meta.generated_at.slice(0, 16).replace("T", " ") + " UTC", "weekly via GitHub Actions")}
+</div>`
+```
+
+## Row {height="560px"}
+
+### Column {width="55%"}
+
+::: {.card title="How it works"}
+**Sources.** [Netflix Top 10](https://www.netflix.com/tudum/top10) (weekly global and per-country lists) and the [IMDb non-commercial datasets](https://developer.imdb.com/non-commercial-datasets/). Information courtesy of IMDb (<https://www.imdb.com>), used with permission for non-commercial use.
+
+**Metrics.** Every number belongs to one season or one film. *Views* are Netflix's own metric (hours viewed ÷ runtime) and exist since June 2023; *hours viewed* go back to July 2021. Averages are per week in the global Top 10.
+
+**Matching Netflix to IMDb.** Netflix publishes titles only, so each show or film is matched by a scoring model rather than an exact title lookup:
+
+1. *Candidates*: normalised titles (accents, punctuation, articles, `&`/`and`, spacing) of the show, its season titles and season-less variants against IMDb primary, original and English/worldwide alternative titles; a typo-level fuzzy fallback for the rest.
+2. *Evidence*: IMDb type must fit (series vs. film); release year cannot be after the first Netflix week; film runtime vs. Netflix runtime; for series, IMDb must have the season that charted and it must have aired around then; "Non-English" on Netflix must agree with an IMDb original title in another language; popularity (votes, capped).
+3. *Confidence*: margin to the runner-up candidate → high / medium / low. Low matches are marked **?**. Manual corrections live in `data/imdb_overrides.csv`.
+
+The full audit trail is downloadable: [matches.csv](data/matches.csv).
+:::
+
+### Column {width="45%"}
+
+```{ojs}
+//| title: Match coverage (titles in the global Top 10)
+{
+  const order = ["high", "medium", "low", "manual", "none"];
+  const rows = meta.match_stats_global_titles.map(d => ({...d, confidence: d.confidence}));
+  return Plot.plot({
+    style: plotStyle, height: 220, marginLeft: 70, width: Math.max(360, width * 0.4),
+    x: {label: "Titles", grid: true},
+    y: {domain: order, label: null},
+    fy: {label: null},
+    facet: {data: rows, y: "kind"},
+    marks: [
+      Plot.barX(rows, {x: "n", y: "confidence", fy: "kind", fill: d => kindColor[d.kind], rx: 2, insetTop: 3, insetBottom: 3, tip: true}),
+      Plot.text(rows, {x: "n", y: "confidence", fy: "kind", text: d => fmtInt(d.n), dx: 4, textAnchor: "start", fill: pal.ink2})
+    ]
+  });
+}
+```
